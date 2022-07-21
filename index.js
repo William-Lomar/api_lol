@@ -30,8 +30,8 @@ import { load } from 'cheerio';
 
 //Kayn Lib de LOL
 import { Kayn, REGIONS } from 'kayn';
-const keyLol = 'RGAPI-e56afd4c-eb4c-4668-8e4e-d185c6599a4e'
-const kayn = Kayn('RGAPI-e56afd4c-eb4c-4668-8e4e-d185c6599a4e');
+const keyLol = 'Sua Chave de API LOL'
+const kayn = Kayn('Sua Chave de API LOL');
 
 //RiotAPI Lib de LOL
 import { RiotAPI, RiotAPITypes, PlatformId } from '@fightmegg/riot-api';
