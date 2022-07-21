@@ -1,32 +1,48 @@
+//.env configs
 import configEnv from 'dotenv';
 configEnv.config();
 
+
+//config express
 import express from 'express'; 
-
-import bodyParser from "body-parser"; 
-const { json } = bodyParser;
-import axios from 'axios';
-
 const app = express();
 import cors from 'cors';
-import createError from 'http-errors';
-import asyncHandler from 'express-async-handler';
-import { load } from 'cheerio';
-import got from 'got';
-const url = 'https://www.leagueofgraphs.com/pt/champions/builds';
-
 var corsOptions = {
   orgim: '/',
   optionsSuccessStatus: 200
 }
+import bodyParser from "body-parser"; 
+const { json } = bodyParser;
 
 app.use(cors(corsOptions));
 app.use(json());
 
+//Requisições http
+import axios from 'axios';
+import got from 'got';
+
+//Criação de erros personalizados
+import createError from 'http-errors';
+import asyncHandler from 'express-async-handler';
+
+//Jquery
+import { load } from 'cheerio';
+
+//Kayn Lib de LOL
+import { Kayn, REGIONS } from 'kayn';
+const keyLol = 'RGAPI-e56afd4c-eb4c-4668-8e4e-d185c6599a4e'
+const kayn = Kayn('RGAPI-e56afd4c-eb4c-4668-8e4e-d185c6599a4e');
+
+//RiotAPI Lib de LOL
+import { RiotAPI, RiotAPITypes, PlatformId } from '@fightmegg/riot-api';
+const rAPI = new RiotAPI(keyLol);
+
+const urlLeagueOfGraphs = 'https://www.leagueofgraphs.com/pt/champions/builds';
+
 // Postgres Configuration
 import postgres from 'pg';
-const { Pool } = postgres
-
+import { stringify } from 'querystring';
+const { Pool } = postgres;
 
 const pool = new Pool({
   user: process.env.DB_USER,
@@ -42,7 +58,6 @@ pool.on('error', (err, client) => {
     process.exit(-1);
 });
 
-const rootUrl = '/api';
 
 app.get(`/teste`, (req, res) => { 
   res.json({info: 'Node.js, Express e API Postgres'}); 
@@ -59,23 +74,30 @@ app.post('/user', asyncHandler(async (req, res, next) =>{
 })
 );
 
-app.get('/matchup',(req,res)=>{
-  axios.get('https://www.leagueofgraphs.com/pt/champions/builds/kennen/vs-ahri',{
-      headers:{
-        'User-Agent':' Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
-      }
-    }).then((response)=>{
-      console.log(response);
-      const $ = load(response.data);
-      let resultado = $('#graphDD2').text().replace(/\s+/g, '')
-      console.log(resultado)
+app.get('/campeoes',(req,res)=>{ // pegar todos os campeoes
+  // campeoes = { interface
+  //   nome:string;
+  //   img:string;
+  // } http://ddragon.leagueoflegends.com/cdn/12.13.1/img/champion/Aatrox.png
 
-    }).catch((erro)=>{
-      
-        console.log("Ocorreu um erro: "+erro)
+  let campeoes = [];
+
+  async function main(){
+    let champs = await rAPI.ddragon.champion.all();
+    champs = champs.data;
+    
+    Object.values(champs).map((champ)=>{
+      campeoes.push({
+            nome: champ.name,
+            img:`http://ddragon.leagueoflegends.com/cdn/${champ.version}/img/champion/${champ.image.full}`
+          })
     })
 
-    res.json("Calmai que já vou saber, blz?")
+    res.json(campeoes);
+  }
+
+  main();
+    
 })
 
 app.post('/matchupOriginal',(req,res)=>{ // Original não trabalha de forma sincrona, envia a resposta do serve antes dos resultados dos get
@@ -123,13 +145,16 @@ app.post('/matchupOriginal',(req,res)=>{ // Original não trabalha de forma sinc
 
 app.post('/matchup',(req,res)=>{ // Este metodo utilizar funções assincronas com for, cada repetição realiza uma solicitação e aguarda a resposta
   //kennen/middle/vs-yasuo/gold
+  // https://lolalytics.com/lol/kennen/vs/yasuo/build/?lane=middle&tier=gold
   let matchup = req.body;       
   let campeoes = matchup.campeoes;
   let rota = matchup.rota; 
-  let oponente = matchup.oponente;
+  let oponente = matchup.oponente.nome.toLowerCase();
+  let oponenteImg = matchup.oponente.img;
   let elo = matchup.elo == 'platina' ? '' : matchup.elo;
   let resultados = [];
   let urlMatchup = '';
+  let urlLolalytics = '';
 
   function realizarMatchup(campeao){
     return new Promise((resolve,reject)=>{
@@ -140,31 +165,47 @@ app.post('/matchup',(req,res)=>{ // Este metodo utilizar funções assincronas c
       }).then((response)=>{
         const $ = load(response.data);
         let resultadoPercent = $('#graphDD2').text().replace(/\s+/g, '')
-  
+        resultadoPercent = Number(resultadoPercent.replace('%',''));
+
         let resultadoMatchup = {
-          campeao:campeao,
+          campeao:campeao.nome,
+          campeaoImg:campeao.img,
           oponente:oponente,
+          oponenteImg:oponenteImg,
           percent:resultadoPercent,
           elo:elo,
-          rota:rota
+          rota:rota,
+          linkLeagueOfGraphs: urlMatchup,
+          linkLolalytics:urlLolalytics
         }
 
-        resolve(resultadoMatchup)
+        resolve(resultadoMatchup);
       }).catch((erro)=>{
-        reject(erro)
+        reject(erro);
       })
     })
   }
 
   async function main(){
-    for (const campeao of campeoes) {
-      urlMatchup = `${url}/${campeao}/${rota}/vs-${oponente}/${elo}`;
-      const resultado = await realizarMatchup(campeao)
+    for (let campeao of campeoes) {
+      urlLolalytics = `https://lolalytics.com/lol/${campeao.nome.toLowerCase()}/vs/${oponente}/build/?lane=${rota}&tier=${elo}`;
+      urlMatchup = `${urlLeagueOfGraphs}/${campeao.nome.toLowerCase()}/${rota}/vs-${oponente}/${elo}`;
+      let resultado = await realizarMatchup(campeao)
       resultados.push(resultado)
     }
      
-    console.log(resultados);
-    res.json(resultados)
+    //ordenar retorno
+    let resultadosOrdenados = resultados.sort((a,b)=>{
+      if(a.percent > b.percent){
+        return -1;
+      }
+      if(a.percent < b.percent){
+        return 1;
+      }
+      return 0;
+    })
+
+    res.json(resultadosOrdenados);
   }
 
   main();

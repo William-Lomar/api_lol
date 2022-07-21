@@ -12,6 +12,7 @@
   "author": "William Lomar",
   "license": "ISC",
   "dependencies": {
+    "@fightmegg/riot-api": "0.0.8",
     "axios": "^0.27.2",
     "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
@@ -20,6 +21,7 @@
     "express-async-handler": "^1.2.0",
     "got": "^12.1.0",
     "http-errors": "^2.0.0",
+    "kayn": "^0.10.2",
     "pg": "^8.7.3"
   },
   "devDependencies": {
